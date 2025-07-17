@@ -1,7 +1,8 @@
 {
   "functions": {
     "api/get-pwc-token.js": {
-      "maxDuration": 30
+      "maxDuration": 30,
+      "memory": 1024
     }
   },
   "regions": ["icn1"]

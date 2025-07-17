@@ -32,11 +32,19 @@ export default async function handler(req, res) {
         ]
       });
     } else {
-      // Vercel 환경: Sparticuz Chromium 사용
+      // Vercel 환경: Sparticuz Chromium 사용 (최적화된 설정)
       browser = await puppeteer.launch({
-        args: chromium.args,
+        args: [
+          ...chromium.args,
+          '--no-sandbox',
+          '--disable-setuid-sandbox',
+          '--disable-dev-shm-usage',
+          '--disable-accelerated-2d-canvas',
+          '--disable-gpu',
+          '--disable-features=VizDisplayCompositor'
+        ],
         defaultViewport: chromium.defaultViewport,
-        executablePath: await chromium.executablePath(),
+        executablePath: await chromium.executablePath('/tmp'),
         headless: chromium.headless,
         ignoreHTTPSErrors: true,
       });
@@ -99,8 +107,8 @@ export default async function handler(req, res) {
 /*
 {
   "dependencies": {
-    "puppeteer-core": "^21.11.0",
-    "@sparticuz/chromium": "^121.0.0"
+    "puppeteer-core": "^22.0.0",
+    "@sparticuz/chromium": "^123.0.0"
   }
 }
 */
