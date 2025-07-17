@@ -30,12 +30,28 @@ export default async function handler(req, res) {
         '--disable-setuid-sandbox',
         '--disable-dev-shm-usage',
         '--disable-web-security',
-        '--disable-features=VizDisplayCompositor'
+        '--disable-features=VizDisplayCompositor',
+        '--ignore-certificate-errors',
+        '--ignore-ssl-errors',
+        '--disable-dev-shm-usage'
       ]
     });
 
     console.log('Browser launched successfully');
     page = await browser.newPage();
+    
+    // Set realistic browser headers
+    await page.setExtraHTTPHeaders({
+      'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,image/webp,*/*;q=0.8',
+      'Accept-Language': 'en-US,en;q=0.5',
+      'Accept-Encoding': 'gzip, deflate, br',
+      'DNT': '1',
+      'Connection': 'keep-alive',
+      'Upgrade-Insecure-Requests': '1'
+    });
+    
+    // Set realistic user agent
+    await page.setUserAgent('Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36');
     
     // Set up request interception
     console.log('Setting up request interception...');
@@ -44,7 +60,8 @@ export default async function handler(req, res) {
     const capturedData = {
       requests: [],
       tokens: [],
-      emails: []
+      emails: [],
+      networkTests: []
     };
 
     // Intercept all requests
@@ -128,88 +145,132 @@ export default async function handler(req, res) {
       }
     });
 
-    // Also capture responses for additional data
-    page.on('response', async (response) => {
-      const url = response.url();
-      const status = response.status();
-      
-      if (status >= 200 && status < 300) {
-        console.log(`Response: ${status} ${url}`);
-        
-        // Look for API responses that might contain tokens
-        if (url.includes('auth') || url.includes('token') || url.includes('login')) {
-          try {
-            const contentType = response.headers()['content-type'];
-            if (contentType && contentType.includes('application/json')) {
-              const responseData = await response.json();
-              console.log('Auth-related API response detected:', url);
-              
-              // Look for token-like data in response
-              const responseStr = JSON.stringify(responseData);
-              if (responseStr.includes('token') || responseStr.includes('auth')) {
-                capturedData.requests.push({
-                  type: 'api_response',
-                  url: url,
-                  status: status,
-                  hasTokenData: true,
-                  timestamp: new Date().toISOString()
-                });
-              }
-            }
-          } catch (e) {
-            // Non-JSON response or error parsing
-          }
-        }
-      }
-    });
-
-    // Try multiple PWC URLs
-    console.log('Navigating to PWC Aura site...');
+    // Comprehensive network testing
+    console.log('🔍 Starting comprehensive network diagnostics...');
     
-    const urlsToTry = [
-      'https://kr-platinum.aura.pwcglb.com/#/',
-      'https://kr-platinum.aura.pwcglb.com',
-      'https://aura.pwc.com',
+    // Test basic connectivity first
+    const basicTests = [
+      'https://www.google.com',
+      'https://httpbin.org/get',
+      'https://example.com',
+      'https://www.microsoft.com'
+    ];
+    
+    for (const testUrl of basicTests) {
+      try {
+        console.log(`Testing basic connectivity: ${testUrl}`);
+        const response = await page.goto(testUrl, { 
+          waitUntil: 'domcontentloaded',
+          timeout: 10000 
+        });
+        const status = response.status();
+        console.log(`✅ ${testUrl} - Status: ${status}`);
+        capturedData.networkTests.push({
+          url: testUrl,
+          success: true,
+          status: status,
+          type: 'basic_connectivity'
+        });
+        break; // If one works, we have basic internet
+      } catch (err) {
+        console.log(`❌ ${testUrl} - Error: ${err.message}`);
+        capturedData.networkTests.push({
+          url: testUrl,
+          success: false,
+          error: err.message,
+          type: 'basic_connectivity'
+        });
+      }
+    }
+
+    // Test PWC-related domains
+    console.log('🔍 Testing PWC domain accessibility...');
+    
+    const pwcDomains = [
+      'https://www.pwc.com',
       'https://login.pwc.com',
-      'https://www.pwc.com'
+      'https://aura.pwc.com',
+      'https://kr-platinum.aura.pwcglb.com',
+      'https://kr-platinum.aura.pwcglb.com/#/'
     ];
     
     let successfulUrl = null;
+    let finalPageUrl = null;
+    let pageTitle = 'Unknown';
     
-    for (const testUrl of urlsToTry) {
+    for (const testUrl of pwcDomains) {
       try {
-        console.log(`Trying URL: ${testUrl}`);
+        console.log(`🔗 Attempting to connect to: ${testUrl}`);
         
         const response = await page.goto(testUrl, { 
           waitUntil: 'networkidle',
-          timeout: 20000 
+          timeout: 15000 
         });
         
-        console.log(`✅ Successfully loaded: ${testUrl} (status: ${response.status()})`);
-        successfulUrl = testUrl;
+        const status = response.status();
+        console.log(`✅ Successfully connected to: ${testUrl} (Status: ${status})`);
         
         // Wait for potential redirects
         await page.waitForTimeout(3000);
         
-        const finalUrl = page.url();
-        console.log(`Final URL: ${finalUrl}`);
+        successfulUrl = testUrl;
+        finalPageUrl = page.url();
+        pageTitle = await page.title();
+        
+        console.log(`📄 Final URL: ${finalPageUrl}`);
+        console.log(`📋 Page title: ${pageTitle}`);
+        
+        capturedData.networkTests.push({
+          url: testUrl,
+          success: true,
+          status: status,
+          finalUrl: finalPageUrl,
+          pageTitle: pageTitle,
+          type: 'pwc_domain'
+        });
         
         break;
         
       } catch (navError) {
-        console.log(`❌ Failed to load ${testUrl}: ${navError.message}`);
+        console.log(`❌ Failed to connect to ${testUrl}: ${navError.message}`);
+        capturedData.networkTests.push({
+          url: testUrl,
+          success: false,
+          error: navError.message,
+          type: 'pwc_domain'
+        });
         continue;
       }
     }
     
     if (!successfulUrl) {
-      throw new Error('All PWC URLs failed to load');
+      // Return detailed network diagnostic information
+      return res.status(503).json({
+        error: 'All PWC URLs failed to load',
+        message: 'Network connectivity issue detected',
+        debug: {
+          basicConnectivity: capturedData.networkTests.filter(t => t.type === 'basic_connectivity'),
+          pwcDomainTests: capturedData.networkTests.filter(t => t.type === 'pwc_domain'),
+          serverInfo: {
+            userAgent: await page.evaluate(() => navigator.userAgent),
+            platform: await page.evaluate(() => navigator.platform),
+            language: await page.evaluate(() => navigator.language)
+          },
+          suggestions: [
+            'PWC domains may be geo-blocked for this server location',
+            'Corporate firewall may be blocking access',
+            'Try using a VPN or different server region',
+            'Consider running this locally instead of on Railway'
+          ]
+        },
+        timestamp: new Date().toISOString()
+      });
     }
 
     // Wait for user interaction or timeout
-    console.log(`Waiting for token capture (timeout: ${timeout}ms)...`);
-    console.log('Current page URL:', page.url());
-    console.log('Page title:', await page.title());
+    console.log(`✅ Successfully loaded PWC site! Waiting for token capture (timeout: ${timeout}ms)...`);
+    console.log(`📍 Current page URL: ${finalPageUrl}`);
+    console.log(`📋 Page title: ${pageTitle}`);
     
     // Set up a promise that resolves when both email and token are found
     const tokenCapturePromise = new Promise((resolve, reject) => {
@@ -247,12 +308,13 @@ export default async function handler(req, res) {
           },
           debug: {
             successfulUrl: successfulUrl,
-            finalUrl: page.url(),
-            pageTitle: 'Will be fetched',
+            finalUrl: finalPageUrl,
+            pageTitle: pageTitle,
             totalRequests: capturedData.requests.length,
             emailsFound: capturedData.emails.length,
             tokensFound: capturedData.tokens.length,
-            recentRequests: capturedData.requests.slice(-10) // Last 10 requests
+            recentRequests: capturedData.requests.slice(-10),
+            networkTests: capturedData.networkTests
           },
           message: emailFound && tokenFound 
             ? 'Both found but response already sent'
@@ -260,17 +322,10 @@ export default async function handler(req, res) {
               ? 'Email found but waiting for token - user needs to complete login'
               : tokenFound 
                 ? 'Token found but email missing'
-                : 'Please navigate to login page and enter your email to capture the token'
+                : 'PWC site loaded successfully! Please log in to capture the authentication token.'
         };
         
-        // Try to get page title safely
-        page.title().then(title => {
-          partialResult.debug.pageTitle = title;
-        }).catch(() => {
-          partialResult.debug.pageTitle = 'Could not retrieve title';
-        }).finally(() => {
-          resolve(partialResult);
-        });
+        resolve(partialResult);
       }, timeout);
     });
 
@@ -290,7 +345,8 @@ export default async function handler(req, res) {
         emailFound,
         tokenFound,
         authData: authData ? { found: true, url: authData.url } : null,
-        emailData: emailData ? { found: true, email: emailData.email } : null
+        emailData: emailData ? { found: true, email: emailData.email } : null,
+        networkTests: capturedData?.networkTests || []
       }
     });
   } finally {
