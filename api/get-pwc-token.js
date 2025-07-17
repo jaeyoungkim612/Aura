@@ -29,7 +29,8 @@ export default async function handler(req, res) {
         '--no-sandbox',
         '--disable-setuid-sandbox',
         '--disable-dev-shm-usage',
-        '--disable-web-security'
+        '--disable-web-security',
+        '--disable-features=VizDisplayCompositor'
       ]
     });
 
@@ -162,23 +163,53 @@ export default async function handler(req, res) {
       }
     });
 
-    // Navigate to PWC site
+    // Try multiple PWC URLs
     console.log('Navigating to PWC Aura site...');
-    const pwcUrl = 'https://kr-platinum.aura.pwcglb.com/#/';
     
-    try {
-      await page.goto(pwcUrl, { 
-        waitUntil: 'networkidle',
-        timeout: 30000 
-      });
-      console.log('✅ PWC site loaded');
-    } catch (navError) {
-      console.log('❌ Navigation failed:', navError.message);
-      throw navError;
+    const urlsToTry = [
+      'https://kr-platinum.aura.pwcglb.com/#/',
+      'https://kr-platinum.aura.pwcglb.com',
+      'https://aura.pwc.com',
+      'https://login.pwc.com',
+      'https://www.pwc.com'
+    ];
+    
+    let successfulUrl = null;
+    
+    for (const testUrl of urlsToTry) {
+      try {
+        console.log(`Trying URL: ${testUrl}`);
+        
+        const response = await page.goto(testUrl, { 
+          waitUntil: 'networkidle',
+          timeout: 20000 
+        });
+        
+        console.log(`✅ Successfully loaded: ${testUrl} (status: ${response.status()})`);
+        successfulUrl = testUrl;
+        
+        // Wait for potential redirects
+        await page.waitForTimeout(3000);
+        
+        const finalUrl = page.url();
+        console.log(`Final URL: ${finalUrl}`);
+        
+        break;
+        
+      } catch (navError) {
+        console.log(`❌ Failed to load ${testUrl}: ${navError.message}`);
+        continue;
+      }
+    }
+    
+    if (!successfulUrl) {
+      throw new Error('All PWC URLs failed to load');
     }
 
     // Wait for user interaction or timeout
     console.log(`Waiting for token capture (timeout: ${timeout}ms)...`);
+    console.log('Current page URL:', page.url());
+    console.log('Page title:', await page.title());
     
     // Set up a promise that resolves when both email and token are found
     const tokenCapturePromise = new Promise((resolve, reject) => {
@@ -215,6 +246,9 @@ export default async function handler(req, res) {
             auth: authData
           },
           debug: {
+            successfulUrl: successfulUrl,
+            finalUrl: page.url(),
+            pageTitle: 'Will be fetched',
             totalRequests: capturedData.requests.length,
             emailsFound: capturedData.emails.length,
             tokensFound: capturedData.tokens.length,
@@ -229,7 +263,14 @@ export default async function handler(req, res) {
                 : 'Please navigate to login page and enter your email to capture the token'
         };
         
-        resolve(partialResult);
+        // Try to get page title safely
+        page.title().then(title => {
+          partialResult.debug.pageTitle = title;
+        }).catch(() => {
+          partialResult.debug.pageTitle = 'Could not retrieve title';
+        }).finally(() => {
+          resolve(partialResult);
+        });
       }, timeout);
     });
 
