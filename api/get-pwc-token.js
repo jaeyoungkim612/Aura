@@ -18,9 +18,9 @@ export default async function handler(req, res) {
   try {
     console.log('Starting Puppeteer with system Chromium...');
     
-    // Launch browser with optimized settings for Docker
+    // Launch browser with Docker-optimized settings
     browser = await puppeteer.launch({
-      headless: 'new', // Use new headless mode
+      headless: 'new',
       ignoreHTTPSErrors: true,
       executablePath: process.env.PUPPETEER_EXECUTABLE_PATH || '/usr/bin/chromium-browser',
       args: [
@@ -39,9 +39,18 @@ export default async function handler(req, res) {
         '--disable-renderer-backgrounding',
         '--no-first-run',
         '--no-default-browser-check',
-        '--disable-default-apps'
+        '--disable-default-apps',
+        '--disable-ipc-flooding-protection',
+        '--disable-hang-monitor',
+        '--disable-prompt-on-repost',
+        '--disable-background-networking',
+        '--disable-sync',
+        '--metrics-recording-only',
+        '--no-crash-upload',
+        '--disable-breakpad'
       ],
-      timeout: 30000
+      timeout: 60000,
+      protocolTimeout: 60000
     });
 
     console.log('Browser launched successfully');
