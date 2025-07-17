@@ -1,7 +1,12 @@
-# 가장 가벼운 Alpine 기반 이미지
+# Use Alpine Linux for smaller image size
 FROM node:18-alpine
 
-# 필수 패키지만 설치
+# Set environment variables to prevent Puppeteer from downloading Chromium
+ENV PUPPETEER_SKIP_CHROMIUM_DOWNLOAD=true
+ENV PUPPETEER_EXECUTABLE_PATH=/usr/bin/chromium-browser
+ENV NODE_ENV=production
+
+# Install system dependencies including Chromium
 RUN apk add --no-cache \
     chromium \
     nss \
@@ -9,28 +14,40 @@ RUN apk add --no-cache \
     freetype-dev \
     harfbuzz \
     ca-certificates \
-    ttf-freefont
+    ttf-freefont \
+    && rm -rf /var/cache/apk/*
 
-# 작업 디렉토리
+# Create app directory
 WORKDIR /app
 
-# 패키지 파일 복사
+# Copy package files first for better Docker layer caching
 COPY package*.json ./
 
-# 의존성 설치
-RUN npm install --omit=dev
+# Configure npm for faster installation
+RUN npm config set fetch-retry-mintimeout 20000 && \
+    npm config set fetch-retry-maxtimeout 120000 && \
+    npm config set fetch-timeout 300000
 
-# 앱 코드 복사
+# Install dependencies with optimizations
+RUN npm ci --omit=dev --no-audit --no-fund --prefer-offline
+
+# Copy application files
 COPY . .
 
-# Puppeteer 환경 변수
-ENV PUPPETEER_SKIP_CHROMIUM_DOWNLOAD=true
-ENV PUPPETEER_EXECUTABLE_PATH=/usr/bin/chromium-browser
-ENV CHROME_BIN=/usr/bin/chromium-browser
-ENV CHROME_PATH=/usr/bin/chromium-browser
+# Create non-root user for security
+RUN addgroup -g 1001 -S nodejs && \
+    adduser -S nextjs -u 1001 && \
+    chown -R nextjs:nodejs /app
 
-# 포트 노출
+# Switch to non-root user
+USER nextjs
+
+# Expose port
 EXPOSE 3000
 
-# 앱 실행
+# Health check
+HEALTHCHECK --interval=30s --timeout=3s --start-period=5s --retries=3 \
+  CMD wget --no-verbose --tries=1 --spider http://localhost:3000/health || exit 1
+
+# Start the application
 CMD ["node", "server.js"] 

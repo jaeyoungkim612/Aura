@@ -13,11 +13,14 @@ export default async function handler(req, res) {
   }
 
   let browser;
+  let page;
   
   try {
-    // Puppeteer with system Chromium for Docker
+    console.log('Starting Puppeteer with system Chromium...');
+    
+    // Launch browser with optimized settings for Docker
     browser = await puppeteer.launch({
-      headless: true,
+      headless: 'new', // Use new headless mode
       ignoreHTTPSErrors: true,
       executablePath: process.env.PUPPETEER_EXECUTABLE_PATH || '/usr/bin/chromium-browser',
       args: [
@@ -30,119 +33,178 @@ export default async function handler(req, res) {
         '--disable-features=VizDisplayCompositor',
         '--no-zygote',
         '--single-process',
-        '--disable-extensions'
-      ]
-    });
-
-    const page = await browser.newPage();
-    
-    // User Agent 설정
-    await page.setUserAgent('Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/121.0.0.0 Safari/537.36');
-    
-    // PWC 사이트 접속
-    await page.goto('https://kr-platinum.aura.pwcglb.com', {
-      waitUntil: 'networkidle0',
+        '--disable-extensions',
+        '--disable-background-timer-throttling',
+        '--disable-backgrounding-occluded-windows',
+        '--disable-renderer-backgrounding',
+        '--no-first-run',
+        '--no-default-browser-check',
+        '--disable-default-apps'
+      ],
       timeout: 30000
     });
 
-    // 페이지 로딩 대기
-    await page.waitForTimeout(2000);
+    console.log('Browser launched successfully');
+    page = await browser.newPage();
+    
+    // Set viewport and user agent
+    await page.setViewport({ width: 1280, height: 720 });
+    await page.setUserAgent('Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/121.0.0.0 Safari/537.36');
+    
+    console.log('Navigating to PWC Aura site...');
+    
+    // Navigate to PWC site with extended timeout
+    await page.goto('https://kr-platinum.aura.pwcglb.com', {
+      waitUntil: 'networkidle0',
+      timeout: 60000
+    });
 
-    // 이메일로 토큰 요청 과정 (실제 사이트 구조에 맞게 수정 필요)
+    console.log('Page loaded successfully');
+    
+    // Wait for page to stabilize
+    await page.waitForTimeout(3000);
+
+    // Try to find and fill email field
     try {
-      // 이메일 입력 필드 대기 및 입력
-      await page.waitForSelector('input[type="email"], #email, #username, [name="email"]', { timeout: 10000 });
+      console.log('Looking for email input field...');
       
-      // 여러 가능한 셀렉터 시도
-      const emailSelectors = ['input[type="email"]', '#email', '#username', '[name="email"]', '[placeholder*="email"]'];
+      // Multiple possible selectors for email input
+      const emailSelectors = [
+        'input[type="email"]', 
+        '#email', 
+        '#username', 
+        '[name="email"]', 
+        '[placeholder*="email" i]',
+        '[placeholder*="이메일" i]',
+        'input[type="text"]'
+      ];
+      
       let emailInput = null;
       
       for (const selector of emailSelectors) {
         try {
+          await page.waitForSelector(selector, { timeout: 5000 });
           emailInput = await page.$(selector);
-          if (emailInput) break;
+          if (emailInput) {
+            console.log(`Found email input with selector: ${selector}`);
+            break;
+          }
         } catch (e) {
+          console.log(`Selector ${selector} not found, trying next...`);
           continue;
         }
       }
       
       if (emailInput) {
-        await emailInput.type(email);
-      } else {
-        throw new Error('Email input field not found');
-      }
-      
-      // 토큰 요청 버튼 클릭 (여러 가능한 셀렉터)
-      const buttonSelectors = ['#getTokenButton', '[type="submit"]', 'button[type="submit"]', '.login-btn', '.submit-btn'];
-      let submitButton = null;
-      
-      for (const selector of buttonSelectors) {
-        try {
-          submitButton = await page.$(selector);
-          if (submitButton) break;
-        } catch (e) {
-          continue;
-        }
-      }
-      
-      if (submitButton) {
-        await submitButton.click();
+        await emailInput.click();
+        await emailInput.type(email, { delay: 100 });
+        console.log('Email entered successfully');
         
-        // 페이지 이동 또는 응답 대기
-        try {
-          await page.waitForNavigation({ waitUntil: 'networkidle0', timeout: 10000 });
-        } catch (e) {
-          // 네비게이션이 없을 수도 있으므로 계속 진행
+        // Look for submit button
+        const buttonSelectors = [
+          '#getTokenButton', 
+          '[type="submit"]', 
+          'button[type="submit"]', 
+          '.login-btn', 
+          '.submit-btn',
+          'button:contains("로그인")',
+          'button:contains("Login")',
+          'button:contains("확인")'
+        ];
+        
+        let submitButton = null;
+        
+        for (const selector of buttonSelectors) {
+          try {
+            submitButton = await page.$(selector);
+            if (submitButton) {
+              console.log(`Found submit button with selector: ${selector}`);
+              break;
+            }
+          } catch (e) {
+            continue;
+          }
+        }
+        
+        if (submitButton) {
+          await submitButton.click();
+          console.log('Submit button clicked');
+          
+          // Wait for potential navigation or response
+          try {
+            await Promise.race([
+              page.waitForNavigation({ waitUntil: 'networkidle0', timeout: 15000 }),
+              page.waitForTimeout(5000)
+            ]);
+          } catch (e) {
+            console.log('No navigation occurred, continuing...');
+          }
+          
+          // Additional wait for any dynamic content
           await page.waitForTimeout(3000);
         }
+      } else {
+        console.log('No email input field found');
       }
       
     } catch (error) {
       console.log('Form interaction error:', error.message);
     }
 
-    // 세션 스토리지에서 토큰 추출
+    console.log('Extracting tokens from storage...');
+    
+    // Extract tokens from storage
     const tokenData = await page.evaluate(() => {
       const storage = {};
+      const localStorage_data = {};
       
-      // 세션 스토리지 전체 확인
-      for (let i = 0; i < sessionStorage.length; i++) {
-        const key = sessionStorage.key(i);
-        storage[key] = sessionStorage.getItem(key);
+      // Session storage
+      try {
+        for (let i = 0; i < sessionStorage.length; i++) {
+          const key = sessionStorage.key(i);
+          storage[key] = sessionStorage.getItem(key);
+        }
+      } catch (e) {
+        console.log('Session storage error:', e);
       }
       
-      // 로컬 스토리지도 확인
-      const localStorage_data = {};
-      for (let i = 0; i < localStorage.length; i++) {
-        const key = localStorage.key(i);
-        localStorage_data[key] = localStorage.getItem(key);
+      // Local storage
+      try {
+        for (let i = 0; i < localStorage.length; i++) {
+          const key = localStorage.key(i);
+          localStorage_data[key] = localStorage.getItem(key);
+        }
+      } catch (e) {
+        console.log('Local storage error:', e);
       }
       
       return {
         sessionStorage: storage,
         localStorage: localStorage_data,
-        // 기존 방식도 시도
+        // Common token keys
         appToken: sessionStorage.getItem('appToken'),
         analytcId: sessionStorage.getItem('analytcId'),
         currentUser: sessionStorage.getItem('currentUser'),
         email: sessionStorage.getItem('email'),
         fullname: sessionStorage.getItem('fullname'),
-        // 추가 가능한 토큰 키들
         token: sessionStorage.getItem('token'),
         authToken: sessionStorage.getItem('authToken'),
         accessToken: sessionStorage.getItem('accessToken'),
-        pwcToken: sessionStorage.getItem('pwcToken')
+        pwcToken: sessionStorage.getItem('pwcToken'),
+        userToken: sessionStorage.getItem('userToken'),
+        loginToken: sessionStorage.getItem('loginToken')
       };
     });
 
-    await browser.close();
+    console.log('Token extraction completed');
 
-    // 토큰이 있는지 확인
+    // Check if any tokens were found
     const hasToken = tokenData.appToken || tokenData.token || tokenData.authToken || 
-                    tokenData.accessToken || tokenData.pwcToken || 
-                    Object.keys(tokenData.sessionStorage).length > 0;
+                    tokenData.accessToken || tokenData.pwcToken || tokenData.userToken ||
+                    tokenData.loginToken || Object.keys(tokenData.sessionStorage).length > 0;
 
     if (!hasToken) {
+      console.log('No tokens found in storage');
       return res.status(401).json({ 
         error: 'No token found',
         debug: 'Token extraction completed but no tokens were found in storage',
@@ -150,21 +212,29 @@ export default async function handler(req, res) {
       });
     }
 
+    console.log('Tokens found successfully');
     res.status(200).json({
       success: true,
-      data: tokenData
+      data: tokenData,
+      timestamp: new Date().toISOString()
     });
 
   } catch (error) {
-    if (browser) {
-      await browser.close();
-    }
-    
-    console.error('Error:', error);
+    console.error('Error during token extraction:', error);
     res.status(500).json({ 
       error: 'Failed to extract token',
-      details: error.message 
+      details: error.message,
+      timestamp: new Date().toISOString()
     });
+  } finally {
+    // Cleanup
+    try {
+      if (page) await page.close();
+      if (browser) await browser.close();
+      console.log('Browser cleanup completed');
+    } catch (cleanupError) {
+      console.error('Cleanup error:', cleanupError);
+    }
   }
 }
 

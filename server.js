@@ -2,50 +2,32 @@
 import express from 'express';
 import path from 'path';
 import { fileURLToPath } from 'url';
+import tokenHandler from './api/get-pwc-token.js';
 
-// ES modules에서 __dirname 구하기
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
 const app = express();
 const PORT = process.env.PORT || 3000;
 
-// 미들웨어 설정
 app.use(express.json());
-app.use(express.static(path.join(__dirname, 'public')));
+app.use(express.static('public'));
 
-// CORS 설정
-app.use((req, res, next) => {
-  res.setHeader('Access-Control-Allow-Origin', '*');
-  res.setHeader('Access-Control-Allow-Methods', 'GET, POST, OPTIONS');
-  res.setHeader('Access-Control-Allow-Headers', 'Content-Type');
-  
-  if (req.method === 'OPTIONS') {
-    res.status(200).end();
-    return;
-  }
-  
-  next();
+// Health check endpoint for Docker
+app.get('/health', (req, res) => {
+  res.status(200).json({ 
+    status: 'healthy', 
+    timestamp: new Date().toISOString(),
+    version: '1.0.0'
+  });
 });
 
-// API 라우트 - PWC 토큰 추출
+// API endpoint
 app.post('/api/get-pwc-token', async (req, res) => {
   try {
-    // API 함수 동적 import
-    const { default: handler } = await import('./api/get-pwc-token.js');
-    
-    // Express req/res를 Vercel 스타일로 변환
-    const mockVercelRes = {
-      status: (code) => ({
-        json: (data) => {
-          res.status(code).json(data);
-        }
-      })
-    };
-    
-    await handler(req, mockVercelRes);
+    await tokenHandler(req, res);
   } catch (error) {
-    console.error('API Error:', error);
+    console.error('Server error:', error);
     res.status(500).json({ 
       error: 'Internal server error',
       details: error.message 
@@ -53,22 +35,27 @@ app.post('/api/get-pwc-token', async (req, res) => {
   }
 });
 
-// 헬스체크 엔드포인트
+// Serve static files
 app.get('/', (req, res) => {
   res.sendFile(path.join(__dirname, 'public', 'index.html'));
 });
 
-app.get('/health', (req, res) => {
-  res.json({ 
-    status: 'healthy',
-    timestamp: new Date().toISOString(),
-    service: 'PWC Token Extractor'
+// Error handling middleware
+app.use((err, req, res, next) => {
+  console.error('Unhandled error:', err);
+  res.status(500).json({ 
+    error: 'Internal server error',
+    message: process.env.NODE_ENV === 'development' ? err.message : 'Something went wrong'
   });
 });
 
-// 서버 시작
-app.listen(PORT, () => {
-  console.log(`🚀 Railway Server running at http://localhost:${PORT}`);
-  console.log(`📡 API endpoint: http://localhost:${PORT}/api/get-pwc-token`);
-  console.log(`🏥 Health check: http://localhost:${PORT}/health`);
+// 404 handler
+app.use((req, res) => {
+  res.status(404).json({ error: 'Not found' });
+});
+
+app.listen(PORT, '0.0.0.0', () => {
+  console.log(`Server running on port ${PORT}`);
+  console.log(`Environment: ${process.env.NODE_ENV}`);
+  console.log(`Puppeteer executable: ${process.env.PUPPETEER_EXECUTABLE_PATH}`);
 }); 
