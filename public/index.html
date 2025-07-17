@@ -105,33 +105,29 @@
       <strong>🔒 보안:</strong> HTTPS 자동 적용
     </div>
 
-    <h2>🧪 실시간 토큰 추출 테스트</h2>
-    <form id="testForm">
-      <div class="form-group">
-        <label for="username">PWC 사용자명:</label>
-        <input type="text" id="username" name="username" required placeholder="PWC 로그인 사용자명 입력">
-      </div>
-      <div class="form-group">
-        <label for="password">PWC 비밀번호:</label>
-        <input type="password" id="password" name="password" required placeholder="PWC 로그인 비밀번호 입력">
-      </div>
-      <button type="submit" id="submitBtn">🔑 토큰 추출하기</button>
-    </form>
+         <h2>🧪 실시간 토큰 추출 테스트</h2>
+     <form id="testForm">
+       <div class="form-group">
+         <label for="email">PWC 이메일 주소:</label>
+         <input type="email" id="email" name="email" required placeholder="PWC 계정 이메일 주소 입력 (예: user@company.com)">
+       </div>
+       <button type="submit" id="submitBtn">🔑 토큰 추출하기</button>
+     </form>
     
     <div id="result" style="display: none;"></div>
     
     <h2>📋 curl 명령어 예시</h2>
-    <pre id="curlExample">curl -X POST <span id="currentUrl"></span>/api/get-pwc-token \
-  -H "Content-Type: application/json" \
-  -d '{"username":"your-username","password":"your-password"}'</pre>
+         <pre id="curlExample">curl -X POST <span id="currentUrl"></span>/api/get-pwc-token \
+   -H "Content-Type: application/json" \
+   -d '{"email":"your-email@company.com"}'</pre>
 
-    <h2>📖 사용 방법</h2>
-    <ol>
-      <li>위 폼에 PWC 로그인 정보를 입력하세요</li>
-      <li>"토큰 추출하기" 버튼을 클릭하세요</li>
-      <li>최대 30초 정도 소요될 수 있습니다</li>
-      <li>성공 시 토큰 정보가 JSON 형태로 표시됩니다</li>
-    </ol>
+         <h2>📖 사용 방법</h2>
+     <ol>
+       <li>위 폼에 PWC 계정 이메일 주소를 입력하세요</li>
+       <li>"토큰 추출하기" 버튼을 클릭하세요</li>
+       <li>최대 30초 정도 소요될 수 있습니다</li>
+       <li>성공 시 토큰 정보가 JSON 형태로 표시됩니다</li>
+     </ol>
 
     <h2>⚠️ 주의사항</h2>
     <ul>
@@ -145,34 +141,33 @@
     // 현재 URL을 curl 예시에 표시
     document.getElementById('currentUrl').textContent = window.location.origin;
     
-    document.getElementById('testForm').addEventListener('submit', async (e) => {
-      e.preventDefault();
-      
-      const username = document.getElementById('username').value;
-      const password = document.getElementById('password').value;
-      const resultDiv = document.getElementById('result');
-      const submitBtn = document.getElementById('submitBtn');
-      
-      // 버튼 비활성화 및 상태 표시
-      submitBtn.disabled = true;
-      submitBtn.textContent = '🔄 토큰 추출 중...';
-      
-      resultDiv.style.display = 'block';
-      resultDiv.className = '';
-      resultDiv.innerHTML = `
-        <h3>🔄 처리 중...</h3>
-        <p>PWC 서버에 연결하여 토큰을 추출하고 있습니다.</p>
-        <p>최대 30초 정도 소요될 수 있습니다. 잠시만 기다려주세요...</p>
-      `;
-      
-      try {
-        const response = await fetch('/api/get-pwc-token', {
-          method: 'POST',
-          headers: {
-            'Content-Type': 'application/json',
-          },
-          body: JSON.stringify({ username, password })
-        });
+           document.getElementById('testForm').addEventListener('submit', async (e) => {
+         e.preventDefault();
+         
+         const email = document.getElementById('email').value;
+         const resultDiv = document.getElementById('result');
+         const submitBtn = document.getElementById('submitBtn');
+         
+         // 버튼 비활성화 및 상태 표시
+         submitBtn.disabled = true;
+         submitBtn.textContent = '🔄 토큰 추출 중...';
+         
+         resultDiv.style.display = 'block';
+         resultDiv.className = '';
+         resultDiv.innerHTML = `
+           <h3>🔄 처리 중...</h3>
+           <p>PWC 서버에 연결하여 토큰을 추출하고 있습니다.</p>
+           <p>최대 30초 정도 소요될 수 있습니다. 잠시만 기다려주세요...</p>
+         `;
+         
+         try {
+           const response = await fetch('/api/get-pwc-token', {
+             method: 'POST',
+             headers: {
+               'Content-Type': 'application/json',
+             },
+             body: JSON.stringify({ email })
+           });
         
         const data = await response.json();
         

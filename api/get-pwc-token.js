@@ -7,10 +7,10 @@ export default async function handler(req, res) {
     return res.status(405).json({ error: 'Method not allowed' });
   }
 
-  const { username, password } = req.body;
+  const { email } = req.body;
 
-  if (!username || !password) {
-    return res.status(400).json({ error: 'Username and password required' });
+  if (!email) {
+    return res.status(400).json({ error: 'Email address required' });
   }
 
   let browser;
@@ -50,15 +50,14 @@ export default async function handler(req, res) {
       timeout: 30000
     });
 
-    // 로그인 과정 (사이트 구조에 따라 수정 필요)
-    await page.waitForSelector('#username', { timeout: 10000 });
-    await page.type('#username', username);
-    await page.type('#password', password);
+    // 이메일로 토큰 요청 과정 (사이트 구조에 따라 수정 필요)
+    await page.waitForSelector('#email', { timeout: 10000 });
+    await page.type('#email', email);
     
-    // 로그인 버튼 클릭
-    await page.click('#loginButton');
+    // 토큰 요청 버튼 클릭
+    await page.click('#getTokenButton');
     
-    // 로그인 완료 대기
+    // 토큰 생성 완료 대기
     await page.waitForNavigation({ waitUntil: 'networkidle0' });
     
     // 세션 스토리지에서 토큰 추출
@@ -100,8 +99,8 @@ export default async function handler(req, res) {
 /*
 {
   "dependencies": {
-    "puppeteer-core": "^21.0.0",
-    "@sparticuz/chromium": "^119.0.0"
+    "puppeteer-core": "^21.11.0",
+    "@sparticuz/chromium": "^121.0.0"
   }
 }
 */

@@ -9,8 +9,8 @@
     "build": "echo 'No build step required'"
   },
   "dependencies": {
-    "puppeteer-core": "^21.0.0",
-    "@sparticuz/chromium": "^119.0.0"
+    "puppeteer-core": "^21.11.0",
+    "@sparticuz/chromium": "^121.0.0"
   },
   "devDependencies": {
     "vercel": "^32.0.0"

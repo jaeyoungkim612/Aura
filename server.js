@@ -84,12 +84,8 @@ const server = http.createServer(async (req, res) => {
         <h2>🧪 실시간 테스트</h2>
         <form id="testForm">
           <div class="form-group">
-            <label for="username">사용자명:</label>
-            <input type="text" id="username" name="username" required>
-          </div>
-          <div class="form-group">
-            <label for="password">비밀번호:</label>
-            <input type="password" id="password" name="password" required>
+            <label for="email">이메일 주소:</label>
+            <input type="email" id="email" name="email" required>
           </div>
           <button type="submit">🔑 토큰 추출 테스트</button>
         </form>
@@ -99,14 +95,13 @@ const server = http.createServer(async (req, res) => {
         <h2>📋 curl 명령어 테스트:</h2>
         <pre>curl -X POST http://localhost:3000/api/get-pwc-token \\
   -H "Content-Type: application/json" \\
-  -d '{"username":"your-username","password":"your-password"}'</pre>
+  -d '{"email":"your-email@company.com"}'</pre>
 
         <script>
           document.getElementById('testForm').addEventListener('submit', async (e) => {
             e.preventDefault();
             
-            const username = document.getElementById('username').value;
-            const password = document.getElementById('password').value;
+            const email = document.getElementById('email').value;
             const resultDiv = document.getElementById('result');
             
             resultDiv.style.display = 'block';
@@ -118,7 +113,7 @@ const server = http.createServer(async (req, res) => {
                 headers: {
                   'Content-Type': 'application/json',
                 },
-                body: JSON.stringify({ username, password })
+                body: JSON.stringify({ email })
               });
               
               const data = await response.json();
