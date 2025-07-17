@@ -24,7 +24,10 @@ RUN npm config set fetch-retry-mintimeout 20000 && \
 # Install dependencies with optimizations
 RUN npm ci --omit=dev --no-audit --no-fund --prefer-offline
 
-# Create non-root user for security BEFORE installing Playwright
+# Install Playwright system dependencies as root
+RUN npx playwright install-deps chromium
+
+# Create non-root user for security
 RUN groupadd -g 1001 nodejs && \
     useradd -r -u 1001 -g nodejs nextjs
 
@@ -37,8 +40,8 @@ RUN chown -R nextjs:nodejs /app
 # Switch to non-root user
 USER nextjs
 
-# Install Playwright browsers as the nextjs user
-RUN npx playwright install chromium --with-deps
+# Install Playwright browsers as the nextjs user (without system deps)
+RUN npx playwright install chromium
 
 # Expose port
 EXPOSE 3000
