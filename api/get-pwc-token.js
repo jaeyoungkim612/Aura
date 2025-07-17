@@ -56,16 +56,26 @@ export default async function handler(req, res) {
       }
     }
     
-    // Now try the PWC site
+    // Now try the PWC site with navigation handling
     console.log('Attempting to access PWC Aura site...');
     const pwcUrl = 'https://kr-platinum.aura.pwcglb.com/';
     
+    let finalUrl = pwcUrl;
     try {
-      await page.goto(pwcUrl, { 
-        waitUntil: 'load', 
+      // Navigate and wait for all network activity to settle
+      const response = await page.goto(pwcUrl, { 
+        waitUntil: 'networkidle', 
         timeout: 30000 
       });
+      
       console.log('✅ PWC site loaded successfully');
+      console.log('Response status:', response.status());
+      
+      // Wait for potential redirects to complete
+      await page.waitForTimeout(3000);
+      finalUrl = page.url();
+      console.log('Final URL after redirects:', finalUrl);
+      
     } catch (pwcError) {
       console.log('❌ PWC site failed:', pwcError.message);
       
@@ -80,11 +90,12 @@ export default async function handler(req, res) {
       for (const altUrl of alternativeUrls) {
         try {
           console.log(`Trying alternative URL: ${altUrl}`);
-          await page.goto(altUrl, { 
-            waitUntil: 'load', 
+          const altResponse = await page.goto(altUrl, { 
+            waitUntil: 'networkidle', 
             timeout: 15000 
           });
-          console.log(`✅ Alternative URL worked: ${altUrl}`);
+          console.log(`✅ Alternative URL worked: ${altUrl} (status: ${altResponse.status()})`);
+          finalUrl = page.url();
           pwcAccessible = true;
           break;
         } catch (altError) {
@@ -97,7 +108,15 @@ export default async function handler(req, res) {
       }
     }
 
-    // Continue with email input logic...
+    // Wait for page to be stable before trying to interact
+    console.log('Waiting for page to stabilize...');
+    await page.waitForTimeout(2000);
+
+    // Check if we're on a login page or need to navigate further
+    const pageTitle = await page.title();
+    console.log('Page title:', pageTitle);
+
+    // Continue with email input logic with navigation safety...
     console.log('Looking for email input field...');
     
     // Multiple selectors to try
@@ -129,48 +148,121 @@ export default async function handler(req, res) {
 
     if (!emailInput) {
       // Take screenshot for debugging
+      console.log('No email input found. Taking screenshot for debugging...');
+      
+      // Get page info safely
+      let pageInfo;
+      try {
+        pageInfo = await page.evaluate(() => ({
+          url: window.location.href,
+          title: document.title,
+          bodyText: document.body.innerText.slice(0, 500)
+        }));
+      } catch (evalError) {
+        console.log('Could not evaluate page info due to navigation:', evalError.message);
+        pageInfo = {
+          url: page.url(),
+          title: await page.title(),
+          bodyText: 'Could not retrieve body text due to navigation'
+        };
+      }
+      
       const screenshot = await page.screenshot({ encoding: 'base64' });
-      console.log('No email input found. Page screenshot taken.');
       
       return res.status(400).json({
         error: 'No email input field found',
         debug: {
-          url: page.url(),
-          title: await page.title(),
+          ...pageInfo,
           screenshot: `data:image/png;base64,${screenshot.slice(0, 100)}...` // Truncated
         }
       });
     }
 
-    // Fill email and continue...
-    await emailInput.fill(email);
-    console.log('Email entered successfully');
-
-    // Return success response
-    return res.status(200).json({
-      success: true,
-      message: 'Email entered successfully',
-      debug: {
-        url: page.url(),
-        title: await page.title()
+    // Fill email and continue with navigation safety...
+    try {
+      await emailInput.fill(email);
+      console.log('Email entered successfully');
+      
+      // Wait a bit for any potential form validation
+      await page.waitForTimeout(1000);
+      
+      // Try to get any tokens or useful info safely
+      let pageData;
+      try {
+        pageData = await page.evaluate(() => {
+          const data = {
+            url: window.location.href,
+            title: document.title,
+            hasSessionStorage: typeof sessionStorage !== 'undefined',
+            hasLocalStorage: typeof localStorage !== 'undefined'
+          };
+          
+          // Try to get storage data safely
+          try {
+            data.sessionStorageKeys = sessionStorage ? Object.keys(sessionStorage) : [];
+            data.localStorageKeys = localStorage ? Object.keys(localStorage) : [];
+          } catch (e) {
+            data.storageError = e.message;
+          }
+          
+          return data;
+        });
+      } catch (evalError) {
+        console.log('Could not evaluate page data due to navigation:', evalError.message);
+        pageData = {
+          url: page.url(),
+          title: await page.title(),
+          evaluationError: evalError.message
+        };
       }
-    });
+
+      // Return success response
+      return res.status(200).json({
+        success: true,
+        message: 'Email entered successfully',
+        data: pageData,
+        timestamp: new Date().toISOString()
+      });
+
+    } catch (fillError) {
+      throw new Error(`Failed to fill email: ${fillError.message}`);
+    }
 
   } catch (error) {
     console.error('Failed to extract token:', error);
+    
+    let debugInfo = null;
+    if (page) {
+      try {
+        debugInfo = {
+          url: page.url(),
+          title: await page.title()
+        };
+        
+        // Try to get user agent safely
+        try {
+          debugInfo.userAgent = await page.evaluate(() => navigator.userAgent);
+        } catch (e) {
+          debugInfo.userAgentError = e.message;
+        }
+      } catch (e) {
+        debugInfo = { error: 'Could not get debug info due to navigation' };
+      }
+    }
     
     return res.status(500).json({
       error: 'Failed to extract token',
       details: error.message,
       timestamp: new Date().toISOString(),
-      debug: page ? {
-        url: page.url(),
-        userAgent: await page.evaluate(() => navigator.userAgent)
-      } : null
+      debug: debugInfo
     });
   } finally {
     if (browser) {
-      await browser.close();
+      try {
+        await browser.close();
+      } catch (e) {
+        console.log('Error closing browser:', e.message);
+      }
     }
   }
 }
