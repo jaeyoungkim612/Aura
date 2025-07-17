@@ -3,11 +3,14 @@ FROM node:18-slim
 
 # Set environment variables
 ENV NODE_ENV=production
+ENV PLAYWRIGHT_BROWSERS_PATH=/ms-playwright
 
 # Install system dependencies for Playwright
 RUN apt-get update && apt-get install -y \
     ca-certificates \
     curl \
+    wget \
+    gnupg \
     && rm -rf /var/lib/apt/lists/*
 
 # Create app directory
@@ -27,6 +30,13 @@ RUN npm ci --omit=dev --no-audit --no-fund --prefer-offline
 # Install Playwright system dependencies as root
 RUN npx playwright install-deps chromium
 
+# Install Playwright browsers as root to system location
+RUN npx playwright install chromium
+
+# Create browser directory and set permissions
+RUN mkdir -p /ms-playwright && \
+    chmod 755 /ms-playwright
+
 # Create non-root user for security
 RUN groupadd -g 1001 nodejs && \
     useradd -r -u 1001 -g nodejs nextjs
@@ -34,14 +44,15 @@ RUN groupadd -g 1001 nodejs && \
 # Copy application files
 COPY . .
 
-# Change ownership to nextjs user
-RUN chown -R nextjs:nodejs /app
+# Change ownership to nextjs user, but keep browser accessible
+RUN chown -R nextjs:nodejs /app && \
+    chmod -R 755 /ms-playwright
 
 # Switch to non-root user
 USER nextjs
 
-# Install Playwright browsers as the nextjs user (without system deps)
-RUN npx playwright install chromium
+# Verify browser installation
+RUN ls -la $PLAYWRIGHT_BROWSERS_PATH || echo "Browser path not found, using default location"
 
 # Expose port
 EXPOSE 3000
