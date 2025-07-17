@@ -17,11 +17,13 @@ export default async function handler(req, res) {
   
   try {
     console.log('Starting Puppeteer with system Chromium...');
+    console.log('Chrome executable path:', process.env.PUPPETEER_EXECUTABLE_PATH || '/usr/bin/chromium-browser');
     
-    // Launch browser with Docker-optimized settings
+    // Launch browser with maximum Docker compatibility
     browser = await puppeteer.launch({
       headless: 'new',
       ignoreHTTPSErrors: true,
+      ignoreDefaultArgs: ['--disable-extensions'],
       executablePath: process.env.PUPPETEER_EXECUTABLE_PATH || '/usr/bin/chromium-browser',
       args: [
         '--no-sandbox',
@@ -29,6 +31,7 @@ export default async function handler(req, res) {
         '--disable-dev-shm-usage',
         '--disable-accelerated-2d-canvas',
         '--disable-gpu',
+        '--disable-gpu-sandbox',
         '--disable-web-security',
         '--disable-features=VizDisplayCompositor',
         '--no-zygote',
@@ -47,18 +50,36 @@ export default async function handler(req, res) {
         '--disable-sync',
         '--metrics-recording-only',
         '--no-crash-upload',
-        '--disable-breakpad'
+        '--disable-breakpad',
+        '--disable-features=TranslateUI',
+        '--disable-features=BlinkGenPropertyTrees',
+        '--disable-logging',
+        '--silent',
+        '--disable-gl-drawing-for-tests'
       ],
-      timeout: 60000,
-      protocolTimeout: 60000
+      timeout: 90000,
+      protocolTimeout: 90000,
+      dumpio: false
     });
 
     console.log('Browser launched successfully');
+    
+    // Test browser connection
+    const version = await browser.version();
+    console.log('Browser version:', version);
+    
     page = await browser.newPage();
     
     // Set viewport and user agent
     await page.setViewport({ width: 1280, height: 720 });
     await page.setUserAgent('Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/121.0.0.0 Safari/537.36');
+    
+    console.log('Page created successfully');
+    
+    // Test simple navigation first
+    console.log('Testing basic navigation...');
+    await page.goto('data:text/html,<html><body>Test</body></html>');
+    console.log('Basic navigation test passed');
     
     console.log('Navigating to PWC Aura site...');
     
@@ -230,16 +251,36 @@ export default async function handler(req, res) {
 
   } catch (error) {
     console.error('Error during token extraction:', error);
+    console.error('Error stack:', error.stack);
+    
+    // More detailed error for debugging
+    let errorDetails = error.message;
+    if (error.message.includes('Target closed')) {
+      errorDetails = `Browser target closed - this usually means Chromium crashed or was killed. Original error: ${error.message}`;
+    }
+    
     res.status(500).json({ 
       error: 'Failed to extract token',
-      details: error.message,
-      timestamp: new Date().toISOString()
+      details: errorDetails,
+      timestamp: new Date().toISOString(),
+      debug: {
+        executablePath: process.env.PUPPETEER_EXECUTABLE_PATH || '/usr/bin/chromium-browser',
+        chromeEnv: {
+          CHROME_BIN: process.env.CHROME_BIN,
+          CHROME_PATH: process.env.CHROME_PATH,
+          DISPLAY: process.env.DISPLAY
+        }
+      }
     });
   } finally {
     // Cleanup
     try {
-      if (page) await page.close();
-      if (browser) await browser.close();
+      if (page && !page.isClosed()) {
+        await page.close();
+      }
+      if (browser && browser.isConnected()) {
+        await browser.close();
+      }
       console.log('Browser cleanup completed');
     } catch (cleanupError) {
       console.error('Cleanup error:', cleanupError);

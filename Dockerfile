@@ -5,6 +5,9 @@ FROM node:18-alpine
 ENV PUPPETEER_SKIP_CHROMIUM_DOWNLOAD=true
 ENV PUPPETEER_EXECUTABLE_PATH=/usr/bin/chromium-browser
 ENV NODE_ENV=production
+ENV CHROME_BIN=/usr/bin/chromium-browser
+ENV CHROME_PATH=/usr/bin/chromium-browser
+ENV DISPLAY=:99
 
 # Install system dependencies including Chromium
 RUN apk add --no-cache \
