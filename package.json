@@ -1,0 +1,21 @@
+{
+  "name": "pwc-token-extractor",
+  "version": "1.0.0",
+  "description": "PWC 토큰 추출 서비스",
+  "main": "index.js",
+  "scripts": {
+    "dev": "node server.js",
+    "vercel:dev": "npx vercel dev",
+    "build": "echo 'No build step required'"
+  },
+  "dependencies": {
+    "puppeteer-core": "^21.0.0",
+    "@sparticuz/chromium": "^119.0.0"
+  },
+  "devDependencies": {
+    "vercel": "^32.0.0"
+  },
+  "engines": {
+    "node": ">=18.0.0"
+  }
+} 

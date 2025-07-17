@@ -1,0 +1,9 @@
+{
+  "functions": {
+    "api/get-pwc-token.js": {
+      "maxDuration": 30
+    }
+  },
+  "regions": ["icn1"],
+  "developmentCommand": "node --version"
+} 
