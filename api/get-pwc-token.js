@@ -19,7 +19,7 @@ export default async function handler(req, res) {
     browser = await puppeteer.launch({
       headless: true,
       ignoreHTTPSErrors: true,
-      executablePath: process.env.PUPPETEER_EXECUTABLE_PATH || '/usr/bin/chromium',
+      executablePath: process.env.PUPPETEER_EXECUTABLE_PATH || '/usr/bin/chromium-browser',
       args: [
         '--no-sandbox',
         '--disable-setuid-sandbox',

@@ -1,48 +1,36 @@
-# Dockerfile for Railway deployment
-FROM node:18-slim
+# 가장 가벼운 Alpine 기반 이미지
+FROM node:18-alpine
 
-# Install dependencies for Puppeteer and Chromium
-RUN apt-get update && apt-get install -y \
+# 필수 패키지만 설치
+RUN apk add --no-cache \
     chromium \
-    fonts-liberation \
-    libasound2 \
-    libatk-bridge2.0-0 \
-    libatk1.0-0 \
-    libatspi2.0-0 \
-    libcups2 \
-    libdbus-1-3 \
-    libgbm1 \
-    libgtk-3-0 \
-    libnspr4 \
-    libnss3 \
-    libx11-xcb1 \
-    libxcomposite1 \
-    libxdamage1 \
-    libxrandr2 \
-    libxss1 \
-    libxtst6 \
-    xdg-utils \
-    --no-install-recommends \
-    && rm -rf /var/lib/apt/lists/*
+    nss \
+    freetype \
+    freetype-dev \
+    harfbuzz \
+    ca-certificates \
+    ttf-freefont
 
-# Set working directory
+# 작업 디렉토리
 WORKDIR /app
 
-# Copy package files
+# 패키지 파일 복사
 COPY package*.json ./
 
-# Install npm dependencies
-RUN npm install
+# 의존성 설치 (캐시 최적화)
+RUN npm ci --only=production
 
-# Copy application code
+# 앱 코드 복사
 COPY . .
 
-# Set environment variables for Puppeteer
+# Puppeteer 환경 변수
 ENV PUPPETEER_SKIP_CHROMIUM_DOWNLOAD=true
-ENV PUPPETEER_EXECUTABLE_PATH=/usr/bin/chromium
+ENV PUPPETEER_EXECUTABLE_PATH=/usr/bin/chromium-browser
+ENV CHROME_BIN=/usr/bin/chromium-browser
+ENV CHROME_PATH=/usr/bin/chromium-browser
 
-# Expose port
+# 포트 노출
 EXPOSE 3000
 
-# Start the application
+# 앱 실행
 CMD ["node", "server.js"] 
