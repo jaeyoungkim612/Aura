@@ -19,6 +19,14 @@ export default async function handler(req, res) {
   let authData = null;
   let emailData = null;
   
+  // Move capturedData outside try block to fix scope issue
+  const capturedData = {
+    requests: [],
+    tokens: [],
+    emails: [],
+    networkTests: []
+  };
+  
   try {
     console.log('Starting Playwright token capture...');
     
@@ -55,14 +63,6 @@ export default async function handler(req, res) {
     
     // Set up request interception
     console.log('Setting up request interception...');
-    
-    // Track captured data
-    const capturedData = {
-      requests: [],
-      tokens: [],
-      emails: [],
-      networkTests: []
-    };
 
     // Intercept all requests
     page.on('request', async (request) => {
@@ -346,7 +346,7 @@ export default async function handler(req, res) {
         tokenFound,
         authData: authData ? { found: true, url: authData.url } : null,
         emailData: emailData ? { found: true, email: emailData.email } : null,
-        networkTests: capturedData?.networkTests || []
+        networkTests: capturedData.networkTests
       }
     });
   } finally {
