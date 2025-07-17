@@ -30,7 +30,7 @@ export default async function handler(req, res) {
   try {
     console.log('Starting Playwright token capture...');
     
-    // Launch browser
+    // Launch browser with user agent set at browser level
     browser = await chromium.launch({
       headless: true,
       args: [
@@ -40,13 +40,18 @@ export default async function handler(req, res) {
         '--disable-web-security',
         '--disable-features=VizDisplayCompositor',
         '--ignore-certificate-errors',
-        '--ignore-ssl-errors',
-        '--disable-dev-shm-usage'
+        '--ignore-ssl-errors'
       ]
     });
 
     console.log('Browser launched successfully');
-    page = await browser.newPage();
+    
+    // Create context with user agent
+    const context = await browser.newContext({
+      userAgent: 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36'
+    });
+    
+    page = await context.newPage();
     
     // Set realistic browser headers
     await page.setExtraHTTPHeaders({
@@ -57,9 +62,6 @@ export default async function handler(req, res) {
       'Connection': 'keep-alive',
       'Upgrade-Insecure-Requests': '1'
     });
-    
-    // Set realistic user agent
-    await page.setUserAgent('Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36');
     
     // Set up request interception
     console.log('Setting up request interception...');
