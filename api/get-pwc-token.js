@@ -74,6 +74,15 @@ export default async function handler(req, res) {
       // Log request for debugging
       console.log(`Request: ${request.method()} ${url}`);
       
+      // Special monitoring for PWC Aura "app" requests
+      if (url.includes('aura.pwcglb.com') && (url.includes('/app') || url.endsWith('/app'))) {
+        console.log('🎯 PWC Aura app request detected:', {
+          url: url,
+          method: request.method(),
+          hasAuth: !!headers['authorization']
+        });
+      }
+      
       // Look for email in referer
       if (headers['referer'] && !emailFound) {
         try {
@@ -95,17 +104,34 @@ export default async function handler(req, res) {
         }
       }
 
-      // Look for authorization token
+      // Look for authorization token (especially Bearer tokens from PWC Aura)
       if (headers['authorization'] && !tokenFound) {
-        tokenFound = true;
-        authData = {
-          authorization: headers['authorization'],
-          found_at: new Date().toISOString(),
-          url: url,
-          method: request.method()
-        };
-        console.log('✅ Authorization token found!');
-        capturedData.tokens.push(authData);
+        const authHeader = headers['authorization'];
+        
+        // Check if it's a Bearer token
+        if (authHeader.startsWith('Bearer ')) {
+          tokenFound = true;
+          authData = {
+            authorization: authHeader,
+            token: authHeader.replace('Bearer ', ''), // Extract just the token part
+            found_at: new Date().toISOString(),
+            url: url,
+            method: request.method(),
+            type: 'Bearer'
+          };
+          console.log('✅ Bearer token found!', {
+            url: url,
+            tokenPreview: authHeader.substring(0, 50) + '...'
+          });
+          capturedData.tokens.push(authData);
+        } else {
+          // Log other authorization headers for debugging
+          console.log('🔍 Non-Bearer auth header found:', {
+            url: url,
+            authType: authHeader.split(' ')[0],
+            preview: authHeader.substring(0, 30) + '...'
+          });
+        }
       }
 
       // Store request info for debugging
@@ -185,15 +211,14 @@ export default async function handler(req, res) {
       }
     }
 
-    // Test PWC-related domains
-    console.log('🔍 Testing PWC domain accessibility...');
+    // Test PWC Aura domains (prioritize the target domain)
+    console.log('🔍 Testing PWC Aura accessibility...');
     
     const pwcDomains = [
-      'https://www.pwc.com',
-      'https://login.pwc.com',
-      'https://aura.pwc.com',
       'https://kr-platinum.aura.pwcglb.com',
-      'https://kr-platinum.aura.pwcglb.com/#/'
+      'https://kr-platinum.aura.pwcglb.com/#/',
+      'https://aura.pwc.com',
+      'https://login.pwc.com'
     ];
     
     let successfulUrl = null;
@@ -269,10 +294,104 @@ export default async function handler(req, res) {
       });
     }
 
-    // Wait for user interaction or timeout
-    console.log(`✅ Successfully loaded PWC site! Waiting for token capture (timeout: ${timeout}ms)...`);
+    // Auto-login with email
+    console.log(`✅ Successfully loaded PWC Aura! Starting auto-login with email: ${email}`);
     console.log(`📍 Current page URL: ${finalPageUrl}`);
     console.log(`📋 Page title: ${pageTitle}`);
+    
+    try {
+      console.log('🔍 Looking for login form...');
+      
+      // Wait for page to be fully loaded
+      await page.waitForTimeout(3000);
+      
+      // Look for common email input selectors
+      const emailSelectors = [
+        'input[type="email"]',
+        'input[name="email"]',
+        'input[id="email"]',
+        'input[placeholder*="email" i]',
+        'input[placeholder*="이메일" i]',
+        'input[name="username"]',
+        'input[id="username"]',
+        'input[type="text"]'
+      ];
+      
+      let emailInput = null;
+      for (const selector of emailSelectors) {
+        try {
+          emailInput = await page.waitForSelector(selector, { timeout: 5000 });
+          if (emailInput) {
+            console.log(`✅ Found email input with selector: ${selector}`);
+            break;
+          }
+        } catch (err) {
+          console.log(`❌ No input found for selector: ${selector}`);
+        }
+      }
+      
+      if (emailInput) {
+        // Clear and type email
+        console.log('📝 Entering email address...');
+        await emailInput.click();
+        await emailInput.fill('');
+        await emailInput.type(email);
+        console.log(`✅ Email entered: ${email}`);
+        
+        // Look for login button
+        const loginSelectors = [
+          'button[type="submit"]',
+          'input[type="submit"]',
+          'button:has-text("로그인")',
+          'button:has-text("Login")',
+          'button:has-text("Sign in")',
+          'button:has-text("Submit")',
+          'button:has-text("다음")',
+          'button:has-text("Next")',
+          '[role="button"]:has-text("로그인")',
+          '.login-button',
+          '#login-button',
+          '.btn-login'
+        ];
+        
+        let loginButton = null;
+        for (const selector of loginSelectors) {
+          try {
+            loginButton = await page.waitForSelector(selector, { timeout: 3000 });
+            if (loginButton) {
+              console.log(`✅ Found login button with selector: ${selector}`);
+              break;
+            }
+          } catch (err) {
+            console.log(`❌ No button found for selector: ${selector}`);
+          }
+        }
+        
+        if (loginButton) {
+          console.log('🚀 Clicking login button...');
+          await loginButton.click();
+          console.log('✅ Login button clicked, waiting for redirect...');
+          
+          // Wait for potential navigation
+          await page.waitForTimeout(3000);
+          
+          const newUrl = page.url();
+          const newTitle = await page.title();
+          console.log(`📍 After login - URL: ${newUrl}`);
+          console.log(`📋 After login - Title: ${newTitle}`);
+        } else {
+          console.log('❌ Could not find login button, will still wait for token capture...');
+        }
+      } else {
+        console.log('❌ Could not find email input field, will still wait for token capture...');
+      }
+      
+    } catch (autoLoginErr) {
+      console.log('❌ Auto-login failed:', autoLoginErr.message);
+      console.log('⏳ Will continue waiting for manual login or token capture...');
+    }
+    
+    console.log(`⏳ Waiting for token capture (timeout: ${timeout}ms)...`);
     
     // Set up a promise that resolves when both email and token are found
     const tokenCapturePromise = new Promise((resolve, reject) => {
