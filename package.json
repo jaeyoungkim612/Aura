@@ -6,17 +6,13 @@
   "main": "server.js",
   "scripts": {
     "start": "node server.js",
-    "dev": "node server.js",
-    "postinstall": "echo 'Skipping Chromium download - using system browser'"
+    "dev": "node server.js"
   },
   "dependencies": {
     "express": "^4.21.2",
-    "puppeteer": "^23.11.1"
+    "playwright": "^1.40.0"
   },
   "engines": {
     "node": ">=18.0.0"
-  },
-  "config": {
-    "puppeteer_skip_chromium_download": "true"
   }
 } 

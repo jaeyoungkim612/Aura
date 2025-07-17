@@ -1,5 +1,5 @@
 // api/get-pwc-token.js
-import puppeteer from 'puppeteer';
+import { chromium } from 'playwright';
 
 export default async function handler(req, res) {
   if (req.method !== 'POST') {
@@ -16,19 +16,15 @@ export default async function handler(req, res) {
   let page;
   
   try {
-    console.log('Starting Puppeteer...');
+    console.log('Starting Playwright Chromium...');
     
-    // Minimal, most stable configuration
-    browser = await puppeteer.launch({
+    // Launch browser with Playwright
+    browser = await chromium.launch({
       headless: true,
-      executablePath: '/usr/bin/chromium-browser',
       args: [
         '--no-sandbox',
         '--disable-setuid-sandbox',
-        '--disable-dev-shm-usage',
-        '--disable-gpu',
-        '--single-process',
-        '--no-zygote'
+        '--disable-dev-shm-usage'
       ]
     });
 

@@ -1,23 +1,12 @@
 # Use Alpine Linux for smaller image size
 FROM node:18-alpine
 
-# Set environment variables to prevent Puppeteer from downloading Chromium
-ENV PUPPETEER_SKIP_CHROMIUM_DOWNLOAD=true
-ENV PUPPETEER_EXECUTABLE_PATH=/usr/bin/chromium-browser
+# Set environment variables
 ENV NODE_ENV=production
-ENV CHROME_BIN=/usr/bin/chromium-browser
-ENV CHROME_PATH=/usr/bin/chromium-browser
-ENV DISPLAY=:99
 
-# Install system dependencies including Chromium
+# Install system dependencies for Playwright
 RUN apk add --no-cache \
-    chromium \
-    nss \
-    freetype \
-    freetype-dev \
-    harfbuzz \
     ca-certificates \
-    ttf-freefont \
     && rm -rf /var/cache/apk/*
 
 # Create app directory
@@ -33,6 +22,9 @@ RUN npm config set fetch-retry-mintimeout 20000 && \
 
 # Install dependencies with optimizations
 RUN npm ci --omit=dev --no-audit --no-fund --prefer-offline
+
+# Install Playwright browsers
+RUN npx playwright install chromium --with-deps
 
 # Copy application files
 COPY . .
