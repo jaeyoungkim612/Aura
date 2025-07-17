@@ -1,8 +1,0 @@
-[phases.setup]
-nixPkgs = ["nodejs_18", "chromium", "nss", "glib", "glibc"]
-
-[phases.install]
-cmds = ["npm install"]
-
-[start]
-cmd = "node server.js" 

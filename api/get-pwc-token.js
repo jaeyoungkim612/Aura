@@ -15,10 +15,11 @@ export default async function handler(req, res) {
   let browser;
   
   try {
-    // Puppeteer 전체 버전 사용 (Chromium 포함)
+    // Puppeteer with system Chromium for Docker
     browser = await puppeteer.launch({
       headless: true,
       ignoreHTTPSErrors: true,
+      executablePath: process.env.PUPPETEER_EXECUTABLE_PATH || '/usr/bin/chromium',
       args: [
         '--no-sandbox',
         '--disable-setuid-sandbox',
@@ -28,7 +29,8 @@ export default async function handler(req, res) {
         '--disable-web-security',
         '--disable-features=VizDisplayCompositor',
         '--no-zygote',
-        '--single-process'
+        '--single-process',
+        '--disable-extensions'
       ]
     });
 
